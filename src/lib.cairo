@@ -1,3 +1,1 @@
-mod contracts {
-    mod ins;
-}
+mod ins;

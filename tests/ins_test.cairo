@@ -4,7 +4,7 @@ use snforge_std::{
     declare, ContractClassTrait, start_prank, stop_prank, start_spoof, TxInfoMockTrait,
     cheatcodes::CheatTarget
 };
-use src::contracts::ins::{InsContractDispatcher, InsContractDispatcherTrait};
+use src::ins::{InsContractDispatcher, InsContractDispatcherTrait};
 use starknet::{contract_address_const, ContractAddress};
 use core::pedersen::{pedersen, PedersenTrait};
 use core::array::SpanTrait;
