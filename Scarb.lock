@@ -2,6 +2,39 @@
 version = 1
 
 [[package]]
+name = "alexandria_data_structures"
+version = "0.2.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git#47dbd482e5a3edded2128d83e309d9c481489e2e"
+dependencies = [
+ "alexandria_encoding",
+]
+
+[[package]]
+name = "alexandria_encoding"
+version = "0.1.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git#47dbd482e5a3edded2128d83e309d9c481489e2e"
+dependencies = [
+ "alexandria_math",
+ "alexandria_numeric",
+]
+
+[[package]]
+name = "alexandria_math"
+version = "0.2.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git#47dbd482e5a3edded2128d83e309d9c481489e2e"
+dependencies = [
+ "alexandria_data_structures",
+]
+
+[[package]]
+name = "alexandria_numeric"
+version = "0.1.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git#47dbd482e5a3edded2128d83e309d9c481489e2e"
+dependencies = [
+ "alexandria_math",
+]
+
+[[package]]
 name = "snforge_std"
 version = "0.1.0"
 source = "git+https://github.com/foundry-rs/starknet-foundry.git?tag=v0.11.0#5465c41541c44a7804d16318fab45a2f0ccec9e7"
@@ -10,5 +43,6 @@ source = "git+https://github.com/foundry-rs/starknet-foundry.git?tag=v0.11.0#546
 name = "src"
 version = "0.1.0"
 dependencies = [
+ "alexandria_math",
  "snforge_std",
 ]

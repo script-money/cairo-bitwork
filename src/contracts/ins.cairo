@@ -1,15 +1,14 @@
 #[starknet::interface]
 trait InsContract<TContractState> {
-    fn ins(ref self: TContractState, ins: Array<felt252>);
+    fn ins(ref self: TContractState, bitwork_id: usize, ins: Array<felt252>);
+    fn get_prefix(self: @TContractState, bitwork_id: usize) -> u128;
 }
 
 #[starknet::contract]
 mod Ins {
-    use core::debug::PrintTrait;
-    use core::option::OptionTrait;
-    use core::traits::TryInto;
     use core::traits::Into;
     use core::integer::u256_from_felt252;
+    use alexandria_math::{BitShift, count_digits_of_base};
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -26,28 +25,36 @@ mod Ins {
     #[storage]
     struct Storage {
         used_sigs: LegacyMap<felt252, bool>,
-        difficulty: u128,
+        bitwork_id: LegacyMap<usize, u128>,
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, difficulty: u128) {
-        self.difficulty.write(difficulty);
+    fn constructor(ref self: ContractState) {
+        self.bitwork_id.write(1, 0xaa);
     }
 
     #[external(v0)]
     impl InsImpl of super::InsContract<ContractState> {
-        fn ins(ref self: ContractState, ins: Array<felt252>) {
+        fn ins(ref self: ContractState, bitwork_id: usize, ins: Array<felt252>) {
             let tx_info = starknet::get_tx_info().unbox();
-            // let mut tx_info_array = array![];
-            // tx_info.serialize(ref tx_info_array);
-            // 'tx_info_array'.print();
-            // tx_info_array.print();
+
             let tx_hash = tx_info.transaction_hash;
+            let high = u256_from_felt252(tx_hash).high;
+
+            let prefix = self.bitwork_id.read(bitwork_id);
+            let size = count_digits_of_base(prefix, 16);
+            let head_letter = BitShift::shr(high, count_digits_of_base(high, 16) * 4 - size * 4);
+
+            assert(head_letter == prefix, 'tx hash is not for this bitwork');
             assert(!self.used_sigs.read(tx_hash), 'tx hash is already used');
-            assert(u256_from_felt252(tx_hash).high < self.difficulty.read(), 'tx hash is too big');
             let inscribe = 'inscribe';
+            // TODO: verify ins data is correct
             self.emit(Event::Ins(Ins { inscribe, ins }));
             self.used_sigs.write(tx_hash, true);
+        }
+
+        fn get_prefix(self: @ContractState, bitwork_id: usize) -> u128 {
+            self.bitwork_id.read(bitwork_id)
         }
     }
 }
