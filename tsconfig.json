@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target":"ES2022",
+    "lib": [
+      "es2020",
+      "dom"
+    ],
+    "outDir": "./out",
+    "rootDir": "./scripts",
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "scripts/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
