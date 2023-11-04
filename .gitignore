@@ -1,2 +1,4 @@
 target
 .snfoundry_cache
+.env
+node_modules/
