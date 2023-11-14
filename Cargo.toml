@@ -1,0 +1,16 @@
+[package]
+name = "cairo-bitwork"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+starknet = "0.8.0"
+starknet-providers = "0.8.0"
+
+tokio = { version = "1.15.0", features = ["full"] }
+url = "2.2.2"
+dotenvy = "0.15.7"
+
+[[bin]]
+name = "bitwork"
+path = "scripts/ins.rs"
