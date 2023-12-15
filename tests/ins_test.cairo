@@ -2,7 +2,7 @@ use core::clone::Clone;
 use core::debug::PrintTrait;
 use snforge_std::{
     declare, ContractClassTrait, start_prank, stop_prank, start_spoof, TxInfoMockTrait,
-    cheatcodes::CheatTarget
+    cheatcodes::CheatTarget, test_address, get_class_hash
 };
 use src::ins::{InsContractDispatcher, InsContractDispatcherTrait};
 use starknet::{contract_address_const, ContractAddress};
@@ -13,17 +13,43 @@ use core::hash::HashStateTrait;
 use alexandria_math::{BitShift, count_digits_of_base};
 use core::integer;
 
+fn deploy_ins() -> ContractAddress {
+    let ins_classhash = declare('Ins');
+    let ins_args = array![0x1234_u128.into()];
+    let ins_contract_address = ins_classhash.deploy(@ins_args).unwrap();
+    ins_contract_address
+}
+
+#[test]
+fn test_owner() {
+    let contract_address = deploy_ins();
+    let owner_dispatcher = InsContractDispatcher { contract_address: contract_address };
+
+    let owner = owner_dispatcher.get_owner();
+    assert(owner == test_address(), 'owner not equal');
+}
+
+#[test]
+fn test_upgrade() {
+    let contract_address = deploy_ins();
+    let upgrade_dispatcher = InsContractDispatcher { contract_address: contract_address };
+    let old_class_hash = get_class_hash(upgrade_dispatcher.contract_address);
+    let Ins_v2_classhash = declare('Ins_v2');
+    upgrade_dispatcher.upgrade(Ins_v2_classhash.class_hash);
+    let new_class_hash = get_class_hash(upgrade_dispatcher.contract_address);
+    assert(old_class_hash != new_class_hash, 'class hash is equal');
+    let owner = upgrade_dispatcher.get_owner();
+    assert(owner == test_address(), 'owner not equal');
+}
 
 #[test]
 #[should_panic(expected: ('tx hash is not for this bitwork',))]
 fn test_ins_fail() {
-    let ins_classhash = declare('Ins');
-    let ins_args = array![];
-    let ins_contract_address = ins_classhash.deploy(@ins_args).unwrap();
+    let ins_contract_address = deploy_ins();
     let ins_dispatcher = InsContractDispatcher { contract_address: ins_contract_address };
 
     let prefix = ins_dispatcher.get_prefix(1);
-    assert(prefix == 0xaa, 'prefix not equal');
+    assert(prefix == 0x1234, 'prefix not equal');
     let ins_calldata = array![
         1,
         3,
@@ -48,9 +74,7 @@ fn test_ins_fail() {
 }
 #[test]
 fn test_ins() {
-    let ins_classhash = declare('Ins');
-    let ins_args = array![];
-    let ins_contract_address = ins_classhash.deploy(@ins_args).unwrap();
+    let ins_contract_address = deploy_ins();
     let ins_dispatcher = InsContractDispatcher { contract_address: ins_contract_address };
 
     let ins_calldata = array![
@@ -73,7 +97,7 @@ fn test_ins() {
     // let message_hash = compute_transaction_hash(user, 1, @calldata, max_fee.into(), 'SN_GOERLI', 1);
     tx_info
         .transaction_hash =
-            Option::Some(0xaa4c86fce2644ae69c017a0ead8d85c4c98c0abbbb426dcfbfeaaa9995f55c);
+            Option::Some(0x123486fce2644ae69c017a0ead8d85c4c98c0abbbb426dcfbfeaaa9995f55c);
     start_spoof(CheatTarget::One(ins_contract_address), tx_info);
     ins_dispatcher.ins(1, calldata);
 }

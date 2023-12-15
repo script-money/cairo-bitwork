@@ -11,7 +11,7 @@ trait InsContract<TContractState> {
 
 
 #[starknet::contract]
-mod Ins {
+mod Ins_v2 {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::access::ownable::interface::IOwnable;
     use openzeppelin::upgrades::UpgradeableComponent;
@@ -87,8 +87,8 @@ mod Ins {
 
             assert(head_letter == prefix, 'tx hash is not for this bitwork');
             assert(!self.used_sigs.read(tx_hash), 'tx hash is already used');
-            let inscribe = 'inscribe';
-            // TODO: verify ins data is correct
+            let inscribe = 'inscribe2';
+
             self.emit(Event::Ins(Ins { inscribe, ins }));
             self.used_sigs.write(tx_hash, true);
         }
