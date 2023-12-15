@@ -1,22 +1,55 @@
+use dotenvy::dotenv;
 use starknet::{
-    accounts::{Call, ConnectedAccount, Execution, ExecutionEncoding, SingleOwnerAccount},
+    accounts::{
+        Account, AccountError, Call, ConnectedAccount, Execution, ExecutionEncoding,
+        SingleOwnerAccount,
+    },
     core::{
         chain_id,
         crypto::compute_hash_on_elements,
-        types::{BlockId, BlockTag, FieldElement, FunctionCall},
+        types::{BlockId, BlockTag, FieldElement, FunctionCall, InvokeTransactionResult},
         utils::get_selector_from_name,
     },
     signers::{LocalWallet, SigningKey},
 };
 use starknet_providers::{jsonrpc::HttpTransport, JsonRpcClient, Provider};
-
-use dotenvy::dotenv;
-use std::time::Instant;
 use std::{env, ops::Add};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    time::Instant,
+};
+use structopt::StructOpt;
+use tokio::{
+    select,
+    sync::{
+        mpsc::{self},
+        oneshot, Mutex as TokioMutex,
+    },
+    task::JoinHandle,
+    time::interval,
+};
 use url::Url;
+
+/// Cairo string for "invoke"
+const PREFIX_INVOKE: FieldElement = FieldElement::from_mont([
+    18443034532770911073,
+    18446744073709551615,
+    18446744073709551615,
+    513398556346534256,
+]);
+
+#[derive(Debug, StructOpt)]
+struct Opt {
+    #[structopt(long, default_value = "3")]
+    worker_count: usize,
+}
 
 #[tokio::main]
 async fn main() {
+    let opt = Opt::from_args();
     dotenv().expect(".env file not found");
 
     let provider = JsonRpcClient::new(HttpTransport::new(
@@ -34,14 +67,6 @@ async fn main() {
     .unwrap();
     let address = FieldElement::from_hex_be(&env::var("ACCOUNT").unwrap()).unwrap();
     print!("address: {:?}\n\n", address);
-
-    /// Cairo string for "invoke"
-    const PREFIX_INVOKE: FieldElement = FieldElement::from_mont([
-        18443034532770911073,
-        18446744073709551615,
-        18446744073709551615,
-        513398556346534256,
-    ]);
 
     let raw_calldata = Call {
         to: ins_contract_address,
@@ -83,8 +108,8 @@ async fn main() {
         let max = FieldElement::from_hex_be(&max_hex).unwrap();
         let min = FieldElement::from_hex_be(&min_hex).unwrap();
 
-        println!("prefix_max: {:?}", max); // 0x00aaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-        println!("prefix_min: {:?}", min); // 0x00aa000000000000000000000000000000000000000000000000000000000000
+        println!("prefix_max: {:?}", max);
+        println!("prefix_min: {:?}", min);
         (max, min)
     } else {
         println!("prefix_source is empty");
@@ -92,18 +117,134 @@ async fn main() {
     };
 
     let calls = vec![raw_calldata];
-    let mut max_fee = FieldElement::from_hex_be("574fbde6000").unwrap(); // 6000000000000
+    let mut max_fee = 6000000000000_usize;
     let chain_id = chain_id::TESTNET;
     let account =
         SingleOwnerAccount::new(provider, signer, address, chain_id, ExecutionEncoding::New);
+    let account = Arc::new(TokioMutex::new(account));
+    let nonce = account.lock().await.get_nonce().await.unwrap();
 
-    let nonce = account.get_nonce().await.unwrap();
     let encode_calls = custom_encode_calls(&calls);
     let call_hash = compute_hash_on_elements(&encode_calls);
     print!("encode_calls: {:?}\n\n", encode_calls);
-    let mut count = 0;
+
+    let hash_counter = Arc::new(AtomicUsize::new(0));
     let start = Instant::now();
 
+    let stop_notify = Arc::new(tokio::sync::Notify::new());
+
+    let (result_sender, mut result_receiver) = mpsc::channel::<FieldElement>(opt.worker_count); // Adjust buffer size as needed
+    let mut worker_handles: Vec<JoinHandle<()>> = Vec::new();
+    for i in 0..opt.worker_count {
+        let max_fee_for_worker =
+            FieldElement::from_dec_str(&(max_fee + 16 * 16 * 16 * 16 * i).to_string()).unwrap();
+        println!("taskid: {}, max_fee_for_worker: {}", i, max_fee_for_worker);
+        let counter = hash_counter.clone();
+        let sender = result_sender.clone();
+        let stop_notify_clone = stop_notify.clone();
+
+        let handle = tokio::spawn(async move {
+            let result = tokio::select! {
+                result = tokio::task::spawn_blocking(move || {
+                    // Call mine_worker and potentially check for stop_notify_clone periodically
+                    mine_worker(
+                        &call_hash,
+                        max_fee_for_worker,
+                        address,
+                        chain_id,
+                        &nonce.clone(),
+                        prefix_max,
+                        prefix_min,
+                        counter,
+                    ) // Assume this returns some result
+                }) => result,
+            };
+
+            // Check the result of the computation
+            match result {
+                Ok(max_fee) => {
+                    // Send the successful max_fee to the main loop
+                    let _ = sender.send(max_fee).await;
+                    // Notify other tasks to stop
+                    stop_notify_clone.notify_waiters();
+                }
+                Err(e) => {
+                    eprintln!("Computation failed: {:?}", e);
+                    // You might still want to notify in case of failure
+                    stop_notify_clone.notify_waiters();
+                }
+            };
+        });
+        worker_handles.push(handle);
+    }
+
+    let mut received = false;
+    while !received {
+        select! {
+            max_fee = result_receiver.recv() => {
+                if let Some(max_fee) = max_fee {
+                    let account_clone = Arc::clone(&account);
+                    let calls_clone = calls.clone();
+                    tokio::spawn(async move {
+                        let account_guard = account_clone.lock().await;
+                        match invoke_ins(&*account_guard, calls_clone, &max_fee, &nonce).await {
+                            Ok(tx_result) => {
+                                println!("🙆 Successfully mined a ins: {:?}\n", tx_result.transaction_hash);
+                            },
+                            Err(e) => {
+                                println!("⚠️ Failed to mine a ins: {:?}\n", e);
+                            }
+                        }
+                    });
+                    received = true; // Update the received flag
+                }
+            }
+        }
+    }
+    // Notify all workers to stop, in case they aren't already
+    stop_notify.notify_waiters();
+
+    // Await the completion of all workers
+    for handle in worker_handles {
+        let _ = handle.await;
+    }
+
+    let duration = start.elapsed();
+    println!("Time elapsed in expensive_function() is: {:?}", duration);
+}
+
+async fn invoke_ins(
+    account: &SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>,
+    calls: Vec<Call>,
+    max_fee: &FieldElement,
+    nonce: &FieldElement,
+) -> Result<
+    InvokeTransactionResult,
+    AccountError<
+        <SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet> as Account>::SignError,
+    >,
+> {
+    let prepared_execution = Execution::new(calls, account)
+        .max_fee(*max_fee)
+        .nonce(*nonce)
+        .fee_estimate_multiplier(1.0)
+        .prepared()
+        .unwrap();
+    let hash = &prepared_execution.transaction_hash(false);
+    print!("sending hash: {:?}\n\n", hash);
+    return prepared_execution.send().await;
+}
+
+fn mine_worker(
+    &call_hash: &FieldElement,
+    mut max_fee: FieldElement,
+    address: FieldElement,
+    chain_id: FieldElement,
+    &nonce: &FieldElement,
+    prefix_max: FieldElement,
+    prefix_min: FieldElement,
+    hash_counter: Arc<AtomicUsize>,
+) -> FieldElement {
     loop {
         max_fee = max_fee.add(FieldElement::from_hex_be("1").unwrap());
 
@@ -117,33 +258,20 @@ async fn main() {
             chain_id,
             nonce,
         ]);
-        // print!("hash: {:?}\n\n", hash);
 
         match prefix_max >= hash && hash >= prefix_min {
             true => {
                 println!("get max fee: {}", max_fee);
-                println!("get nonce: {}", nonce);
-                print!("count: {:?}\n\n", count);
-                break;
+                println!("get hash: {:x}", hash);
+                print!("get counter: {}\n", hash_counter.load(Ordering::SeqCst));
+                return max_fee;
             }
             false => {
-                count += 1;
+                hash_counter.fetch_add(1, Ordering::SeqCst);
+                continue;
             }
-        }
+        };
     }
-    let duration = start.elapsed();
-    println!("Time elapsed in expensive_function() is: {:?}", duration);
-
-    let prepared_execution = Execution::new(calls, &account)
-        .max_fee(max_fee)
-        .nonce(nonce)
-        .fee_estimate_multiplier(1.0)
-        .prepared()
-        .unwrap();
-    let hash = &prepared_execution.transaction_hash(false);
-    print!("hash: {:?}\n\n", hash);
-    let tx = prepared_execution.send().await.unwrap();
-    dbg!(&tx.transaction_hash);
 }
 
 fn custom_encode_calls(calls: &[Call]) -> Vec<FieldElement> {

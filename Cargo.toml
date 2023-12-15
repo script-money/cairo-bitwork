@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 starknet = "0.8.0"
 starknet-providers = "0.8.0"
-
+structopt = { version = "0.3", default-features = false }
 tokio = { version = "1.15.0", features = ["full"] }
 url = "2.2.2"
 dotenvy = "0.15.7"
