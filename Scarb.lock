@@ -35,20 +35,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cairo_transaction"
+version = "0.1.0"
+source = "git+https://github.com/script-money/cairo_transaction.git#ffdbddda1b5c5483ab0e7da3bea66766f766a90a"
+
+[[package]]
 name = "openzeppelin"
 version = "0.8.0"
 source = "git+https://github.com/OpenZeppelin/cairo-contracts.git?tag=v0.8.0#c23e8e96de60e6e3159b1ff8591a1187269c0eb7"
 
 [[package]]
 name = "snforge_std"
-version = "0.1.0"
-source = "git+https://github.com/foundry-rs/starknet-foundry.git?tag=v0.11.0#5465c41541c44a7804d16318fab45a2f0ccec9e7"
+version = "0.14.0"
+source = "git+https://github.com/foundry-rs/starknet-foundry.git?tag=v0.14.0#e8cbecee4e31ed428c76d5173eaa90c8df796fe3"
 
 [[package]]
 name = "src"
 version = "0.1.0"
 dependencies = [
  "alexandria_math",
+ "cairo_transaction",
  "openzeppelin",
  "snforge_std",
 ]

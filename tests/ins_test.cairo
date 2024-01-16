@@ -12,6 +12,8 @@ use starknet::{contract_address_to_felt252, account::Call};
 use core::hash::HashStateTrait;
 use alexandria_math::{BitShift, count_digits_of_base};
 use core::integer;
+use cairo_transaction::transaction::get_execute_call_data;
+use cairo_transaction::hash::compute_transaction_hash;
 
 fn deploy_ins() -> ContractAddress {
     let ins_classhash = declare('Ins');
@@ -127,90 +129,3 @@ fn prefix_test() {
     let head_letter = BitShift::shr(high_number, shift_amount);
     assert(head_letter == prefix, 'first 4 digits not equal');
 }
-
-
-// helper functions, definition same as starknet.js
-
-fn compute_hash_on_elements(elements: @Array<felt252>) -> felt252 {
-    let mut state = PedersenTrait::new(0);
-    let mut i = 0;
-    loop {
-        if i == elements.len() {
-            break;
-        }
-        state = state.update(*elements.at(i));
-        i += 1;
-    };
-    state.update(i.into()).finalize()
-}
-
-fn compute_transaction_hash(
-    contractAddress: ContractAddress,
-    version: felt252,
-    calldata: @Array<felt252>,
-    maxFee: felt252,
-    chainId: felt252,
-    nonce: felt252
-) -> felt252 {
-    let tx_hash = calculate_transaction_hash_common(
-        'invoke', version, contractAddress, 0, calldata, maxFee, chainId, array![nonce]
-    );
-    tx_hash
-}
-
-fn get_execute_call_data(mut calls: Array<Call>) -> Array<felt252> {
-    let mut result: Array<felt252> = ArrayTrait::new();
-    result.append(calls.len().into());
-    loop {
-        match calls.pop_front() {
-            Option::Some(mut call) => {
-                result.append(contract_address_to_felt252(call.to));
-                result.append(call.selector);
-                result.append(call.calldata.len().into());
-                let mut j = 0;
-                loop {
-                    if j == call.calldata.len() {
-                        break;
-                    }
-                    result.append(*call.calldata.at(j));
-                    j += 1;
-                };
-            },
-            Option::None => { break; },
-        };
-    };
-    result
-}
-
-fn calculate_transaction_hash_common(
-    tx_hash_prefix: felt252,
-    version: felt252,
-    contract_address: ContractAddress,
-    entry_point_selector: felt252,
-    calldata: @Array<felt252>,
-    max_fee: felt252,
-    chain_id: felt252,
-    additional_data: Array<felt252>
-) -> felt252 {
-    let calldata_hash = compute_hash_on_elements(calldata);
-    let mut dataToHash = array![
-        tx_hash_prefix,
-        version,
-        contract_address_to_felt252(contract_address),
-        entry_point_selector,
-        calldata_hash,
-        max_fee,
-        chain_id
-    ];
-    let mut i = 0;
-    loop {
-        if i == additional_data.len() {
-            break;
-        }
-        dataToHash.append(*additional_data.at(i));
-        i += 1;
-    };
-    let tx_hash = compute_hash_on_elements(@dataToHash);
-    tx_hash
-}
-

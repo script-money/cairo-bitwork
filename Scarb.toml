@@ -10,9 +10,10 @@ casm = true
 
 [dependencies]
 starknet = "2.3.1"
-snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry.git", tag = "v0.11.0" }
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry.git", tag = "v0.14.0" }
 alexandria_math = { git = "https://github.com/keep-starknet-strange/alexandria.git" }
 openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v0.8.0" }
+cairo_transaction = { git = "https://github.com/script-money/cairo_transaction.git" }
 
 [tool.snforge]
 exit_first = true
