@@ -101,7 +101,9 @@ fn test_ins() {
     // let message_hash = compute_transaction_hash(user, 1, @calldata, max_fee.into(), 'SN_GOERLI', 1);
     tx_info
         .transaction_hash =
-            Option::Some(0x123486fce2644ae69c017a0ead8d85c4c98c0abbbb426dcfbfeaaa9995f55c);
+            Option::Some(
+                0x123486fce2644ae69c017a0ead8d85c4c98c0abbbb426dcfbfeaaa9995f55c
+            ); // tx hash should start with 0x1234
     start_spoof(CheatTarget::One(ins_contract_address), tx_info);
     ins_dispatcher.ins(1, calldata);
 }
