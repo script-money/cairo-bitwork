@@ -13,7 +13,7 @@ use core::hash::HashStateTrait;
 use alexandria_math::{BitShift, count_digits_of_base};
 use core::integer;
 use cairo_transaction::transaction::get_execute_call_data;
-use cairo_transaction::hash::compute_transaction_hash;
+use cairo_transaction::hash::calculate_transaction_hash;
 
 fn deploy_ins() -> ContractAddress {
     let ins_classhash = declare('Ins');
@@ -69,7 +69,9 @@ fn test_ins_fail() {
     let max_fee =
         100000000000000; // user change max_fee from minumum to target to compute target tx hash
     tx_info.max_fee = Option::Some(max_fee);
-    let message_hash = compute_transaction_hash(user, 1, @calldata, max_fee.into(), 'SN_GOERLI', 1);
+    let message_hash = calculate_transaction_hash(
+        user, 1, @calldata, max_fee.into(), 'SN_GOERLI', 1
+    );
     tx_info.transaction_hash = Option::Some(message_hash);
     start_spoof(CheatTarget::One(ins_contract_address), tx_info);
     ins_dispatcher.ins(1, calldata);

@@ -37,7 +37,7 @@ dependencies = [
 [[package]]
 name = "cairo_transaction"
 version = "0.1.0"
-source = "git+https://github.com/script-money/cairo_transaction.git#ffdbddda1b5c5483ab0e7da3bea66766f766a90a"
+source = "git+https://github.com/script-money/cairo_transaction.git#02f07844d39487c34b7a91402184fa50c8822476"
 
 [[package]]
 name = "openzeppelin"
